@@ -37,10 +37,16 @@
         $body = "username=$( [uri]::EscapeDataString($cred.UserName) )&password=$( [uri]::EscapeDataString($cred.GetNetworkCredential().Password) )"
 
         #Sends the API call to the site
-        $response = Invoke-RestMethod $tokenAddress -Method 'POST' -Headers $headers -Body $body -ErrorAction Stop
+        $response = Invoke-WebRequest $tokenAddress -Method 'POST' -Headers $headers -Body $body -ErrorAction Stop
 
-        #Stores the token from the response in the $token variable
-        $token = $response.access_token;
+        #If successful, returns a 200 Status Code
+        if ( $response.StatusCode -match 200 ){
+
+            #Stores the token from the response in the $token variable
+            $token = $response.access_token;
+
+        }
+        
         
     }
     catch [ System.Net.WebException ] {

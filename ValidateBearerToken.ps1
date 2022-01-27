@@ -20,7 +20,7 @@ param (
     # http(s)://mealie.XXXX.com/api/users/self - subdomain example
     # http://192.168.1.X/mealie/api/users/self - subfolder example
     $token_endpoint = '/api/users/self'
-    $tokenAddress = $mealieURL + $token_endpoint
+    $endpoint = $mealieURL + $token_endpoint
 
     try {
 
@@ -29,9 +29,19 @@ param (
         $headers.Add("Authorization", "Bearer $token")
 
         #Makes the API call, if it returns successful, we know it was a valid token
-        Invoke-RestMethod $tokenAddress -Method 'GET' -Headers $headers -ErrorAction Stop | Out-Null
+        $response = Invoke-WebRequest $endpoint -Method 'GET' -Headers $headers -ErrorAction Stop
         
-        $validToken = $true
+        #returns a 200 Status Code if successful
+        if ( $response.StatusCode -match 200 ){
+
+            $validToken = $true
+        
+        }
+        else {
+            
+            $validToken = $false
+
+        }
 
     }
     catch {
