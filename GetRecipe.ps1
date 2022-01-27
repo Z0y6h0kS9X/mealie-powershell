@@ -15,6 +15,15 @@
       $token
 
   )
+
+    #If the last character in the site is a '/', removes it for consistent processing
+    IF ( $mealieURL -match '/$' ){
+
+        #Removes the last character from the string and assigns the new value to $mealieURL
+        $mealieURL = $mealieURL.Remove(($mealieURL.Length - 1))
+
+    }
+
     #Generates the API endpoint using the mealie site and the slug
     $endpoint = "$mealieURL/api/recipes/$slug"
 
@@ -26,8 +35,19 @@
     try {
 
         #Initiates the API call
-        $response = Invoke-RestMethod $endpoint -Method 'GET' -Headers $headers -ErrorAction Stop
-        return $response | ConvertTo-Json
+        $response = Invoke-WebRequest $endpoint -Method 'GET' -Headers $headers -ErrorAction Stop
+
+        #returns a 200 Status Code if successful
+        if ( $response.StatusCode -match 200 ){
+
+            return $response | ConvertTo-Json
+            
+        }
+        else{
+
+            return $false
+
+        }
         
     }
     catch {
