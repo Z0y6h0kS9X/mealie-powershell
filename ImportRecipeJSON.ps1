@@ -1,5 +1,5 @@
 <#
-    This script will allow you to import a recipe using JSON from a file or JSON string
+    This script will allow you to import a recipe using JSON from a file
 #>
 
 [CmdletBinding()]
@@ -15,63 +15,41 @@ param (
     [string]
     $token,
 
-    #Either a filepath to a file containing JSON, or a string of JSON
+    #filepath to file containing JOSN
     [Parameter(Mandatory = $true)]
-    $source
-
+    [string]
+    $filePath
 )
 
-$currentDirectory = ( Get-Location )
+#Gets the current directory to use a temp file
+$currentDirectory = (Get-Location).Path
 
-#Starts by seeing if Test-Path resolves true, if so it assumes that it is a file
-if ( Test-Path $source ){
+#Attempts to get the content of the file and convert it to JSON
+try {
+    
+    $recipe = Get-Content $filePath -ErrorAction Stop
+    $recipe = $recipe | ConvertFrom-Json -ErrorAction Stop
 
-    Write-Host "Attempting to import recipe from file."
-
-    try {
-        
-        $recipe = Get-Content $source | ConvertFrom-Json -ErrorAction Stop
-        #technically a blank file IS valid JSON, this catches that occurrence
-        if ( $recipe.Length -match 0 ){
-            Write-Host "The JSON file is blank!" -ForegroundColor Red
-            Read-Host -Prompt "Press any key to exit..."
-        EXIT
-        }
-
-    }
-    catch {
-
-        Write-Host "Unable to parse the file: $source, with the following error" -ForegroundColor Red
-        Write-Host
-        $error[0]
+    #Technically a blank file IS valid JSON, this catches that occurrence
+    if ( $recipe.Length -match 0 ){
+        Write-Host "The JSON file is blank!" -ForegroundColor Red
         Read-Host -Prompt "Press any key to exit..."
-        EXIT
-        
-    }        
+    EXIT
+    }
 
 }
-#If the Test-Path returns false, assumes it is a string
-else {
+catch {
 
-    Write-Host "Attempting to import recipe from JSON string"
-
-    try {
-
-        $recipe = $source | ConvertFrom-Json -ErrorAction Stop
-        
-    }
-    catch {
-
-        Write-Host "Unable to convert the string to JSON, see below" -ForegroundColor Red
-        Write-Host
-        $error[0]
-        Read-Host -Prompt "Press any key to exit..."
-        EXIT
-        
-    }
+    Write-Host "Unable to parse the file: $source, with the following error" -ForegroundColor Red
+    Write-Host
+    $error[0]
+    Read-Host -Prompt "Press any key to exit..."
+    EXIT
     
-    
-}
+}        
+
+
+#region Validates Input
 
 #Tests to make sure the required fields are passed
 <#
@@ -117,6 +95,8 @@ if ( [string]::IsNullOrEmpty($recipe.slug) ){
 
 }
 
+#endregion
+
 #If the last character in the site is a '/', removes it for consistent processing
 IF ( $mealieURL -match '/$' ){
 
@@ -125,9 +105,15 @@ IF ( $mealieURL -match '/$' ){
 
 }
 
-#Exports the object to a JSON file to set the encoding properly and imports it as a text string
-$recipe | ConvertTo-Json | Out-File "$currentDirectory\temp.json"
-$recipeBody = Get-Content "$currentDirectory\temp.json"
+#Exports the object to a JSON file to set the encoding properly, sometimes it will add an A with a special character over it
+$jsonText = ($recipe | ConvertTo-Json) -replace [char](194),""
+$outPath = "$currentDirectory\tempRecipe.json"
+
+#Needs to be UTF-8 NO BOM, which Out-File does not set by default, requiring use of the .Net class
+$Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+[System.IO.File]::WriteAllLines($outPath, $jsonText, $Utf8NoBomEncoding)
+
+#region Builds the API Call
 
 #Generates the API endpoint
 $endpoint = "$mealieURL/api/recipes/create"
@@ -138,7 +124,9 @@ $headers.Add("Authorization", "Bearer $token")
 $headers.Add("Content-Type", "application/json")
 
 #Assigns the recipe content to be the body
-$body = $recipeBody
+$body = Get-Content "$currentDirectory\tempRecipe.json"
+
+#endregion
 
 #Attempts to make the API call
 try {
@@ -150,8 +138,8 @@ try {
         Write-Host "Successfully imported: " -ForegroundColor Green -NoNewline
         Write-Host $recipe.Name
 
-        #Removes the file after it has served ts purpose
-        Remove-Item "$currentDirectory\temp.json"
+        #Removes the file after it has served its purpose
+        Remove-Item "$currentDirectory\tempRecipe.json"
     }
     
 }
